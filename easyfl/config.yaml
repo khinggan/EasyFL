@@ -4,7 +4,7 @@ task_id: ""
 # Provide dataset and federated learning simulation related configuration.
 data:
   # The root directory where datasets are stored.
-  root: "./data/"
+  root: "../data/"
   # The name of the dataset, support: femnist, shakespeare, cifar10, and cifar100.
   dataset: femnist
   # The data distribution of each client, support: iid, niid (for femnist and shakespeare), and dir and class (for cifar datasets).
