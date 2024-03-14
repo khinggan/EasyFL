@@ -9,8 +9,10 @@ from itertools import count
 logger = logging.getLogger(__name__)
 from easyfl.client import BaseClient
 from easyfl.reinforcement.replaybuffer import ReplayMemory, Transition
-
-
+from easyfl.protocol import codec
+from easyfl.pb import server_service_pb2 as server_pb
+from easyfl.pb import common_pb2 as common_pb
+import copy
 
 
 class RL_Client(BaseClient):
@@ -43,7 +45,7 @@ class DQN_Client(RL_Client):
         self.eps_end = 0.05
         self.eps_decay = 1000.0
         self.gamma = 0.99
-        self.tau = 0.005,
+        self.tau = 0.005
         
         self.step_done = 0
         self.batch_size = 128
@@ -52,9 +54,9 @@ class DQN_Client(RL_Client):
     def pre_train(self):
         """Setup loss function and optimizer before training."""
         self.simulate_straggler()
-        self.state, _ = self.env.reset()
-        self.n_actions = self.env.action_space.n
-        self.n_observation = len(self.state)
+        # self.state, _ = self.env.reset()
+        # self.n_actions = self.env.action_space.n
+        # self.n_observation = len(self.state)
 
         self.policy_net = self.model
         self.target_net = self.model
@@ -173,3 +175,37 @@ class DQN_Client(RL_Client):
                 return self.policy_net(self.state).max(1).indices.view(1, 1)
         else:
             return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
+
+    def construct_upload_request(self):
+        """Construct client upload request for training updates and testing results.
+
+        Returns:
+            :obj:`UploadRequest`: The upload request defined in protobuf to unify local and remote operations.
+        """
+        data = codec.marshal(server_pb.Performance(accuracy=self.test_accuracy, loss=self.test_loss))
+        typ = common_pb.DATA_TYPE_PERFORMANCE
+        try:
+            if self._is_train:
+                data = codec.marshal(copy.deepcopy(self.compressed_model))
+                typ = common_pb.DATA_TYPE_PARAMS
+                # data_size = self.train_data.size(self.cid)
+                data_size = 1
+            else:
+                # data_size = 1 if not self.test_data else self.test_data.size(self.cid)
+                data_size = 1
+        except KeyError:
+            # When the datasize cannot be get from dataset, default to use equal aggregate
+            data_size = 1
+
+        m = self._tracker.get_client_metric().to_proto() if self._tracker else common_pb.ClientMetric()
+        return server_pb.UploadRequest(
+            task_id=self.conf.task_id,
+            round_id=self.conf.round_id,
+            client_id=str(self.cid),
+            content=server_pb.UploadContent(
+                data=data,
+                type=typ,
+                data_size=data_size,
+                metric=m,
+            ),
+        )

@@ -124,7 +124,7 @@ class Coordinator_RL(Coordinator):
                 state, _ = self.envs[0].reset()
                 n_actions = self.envs[0].action_space.n
                 n_observation = len(state)
-                self.model = self._model_class(n_observation, n_actions)
+                self.model = self._model_class(n_observation, n_actions).to(self.conf.device)
 
     def init_server(self):
         """Initialize a server instance."""

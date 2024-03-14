@@ -165,10 +165,10 @@ class BaseServer(object):
             self.post_train()
 
             # Test
-            if self._do_every(self.conf.server.test_every, self._current_round, self.conf.server.rounds):
-                self.pre_test()
-                self.test()
-                self.post_test()
+            # if self._do_every(self.conf.server.test_every, self._current_round, self.conf.server.rounds):
+            #     self.pre_test()
+            #     self.test()
+            #     self.post_test()
 
             # Save Model
             self.save_model()
