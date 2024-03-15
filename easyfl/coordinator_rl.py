@@ -9,7 +9,8 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
-from easyfl.reinforcement.rl_client import RL_Client, DQN_Client
+from easyfl.client.dqn_client import DQN_Client
+from easyfl.server.dqn_server import DQNServer
 from easyfl.datasets import TEST_IN_SERVER
 from easyfl.distributed import dist_init, get_device
 from easyfl.models.model import load_model
@@ -129,7 +130,7 @@ class Coordinator_RL(Coordinator):
     def init_server(self):
         """Initialize a server instance."""
         if not self.registered_server:
-            self._server_class = BaseServer
+            self._server_class = DQNServer
 
         kwargs = {
             "is_remote": self.conf.is_remote,
@@ -137,11 +138,14 @@ class Coordinator_RL(Coordinator):
         }
 
         self.server = self._server_class(self.conf, **kwargs)
+        if self.conf.model == "dqn":
+            self.server.policy_net = self.model
+            self.server.target_net = self.model
 
     def init_clients(self):
         """Initialize client instances, each represent a federated reinforcement learning clients."""
         if not self.registered_client:
-            self._client_class = RL_Client
+            self._client_class = DQN_Client
 
         if self.conf.model == "dqn":
             self._client_class = DQN_Client
@@ -172,7 +176,7 @@ class Coordinator_RL(Coordinator):
             :obj:`BaseClient`: The initialized client instance.
         """
         if not self.registered_client:
-            self._client_class = rl_client
+            self._client_class = None
 
         # Get a random client if not specified
         if self.conf.index:

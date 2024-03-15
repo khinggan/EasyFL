@@ -41,7 +41,7 @@ data:
   weights: NULL
 
 env:
-  num_of_clients: 10    # client number
+  num_of_clients: 3    # client number
   env_dist: "same"      # same or different (e.g. different map, but observation space and action space is same)
   # if env_dist is different
   envs: 
@@ -66,11 +66,11 @@ test_method: "average"
 server:
   track: False  # Whether track server metrics using the tracking service.
   rounds: 10  # Total training round.
-  clients_per_round: 5  # The number of clients to train in each round.
+  clients_per_round: 3  # The number of clients to train in each round.
   test_every: 1  # The frequency of testing: conduct testing every N round.
   save_model_every: 10  # The frequency of saving model: save model every N round.
   save_model_path: ""  # The path to save model. Default path is root directory of the library.
-  batch_size: 32  # The batch size of test_in_server.
+  batch_size: 128  # The batch size of test_in_server.
   test_all: False  # Whether test all clients or only selected clients.
   random_selection: True  # Whether select clients to train randomly.
   # The strategy to aggregate client uploaded models, options: FedAvg, equal.
@@ -84,9 +84,9 @@ server:
 
 client:
   track: False  # Whether track server metrics using the tracking service.
-  batch_size: 32  # The batch size of training in client.
+  batch_size: 128  # The batch size of training in client.
   test_batch_size: 5  # The batch size of testing in client.
-  local_epoch: 10  # The number of epochs to train in each round.
+  local_epoch: 60  # The number of epochs to train in each round.
   optimizer:
     type: "Adam"  # The name of the optimizer, options: Adam, SGD.
     lr: 0.001

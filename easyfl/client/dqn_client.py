@@ -7,24 +7,16 @@ import torch.optim as optim
 import logging
 from itertools import count
 logger = logging.getLogger(__name__)
+logger.setLevel(10)
 from easyfl.client import BaseClient
-from easyfl.reinforcement.replaybuffer import ReplayMemory, Transition
+from easyfl.models.dqn import ReplayMemory, Transition
 from easyfl.protocol import codec
 from easyfl.pb import server_service_pb2 as server_pb
 from easyfl.pb import common_pb2 as common_pb
 import copy
 
 
-class RL_Client(BaseClient):
-    def __init__(self, cid, conf, train_data=None, test_data=None, device=None, env=None, **kwargs):
-        super(RL_Client, self).__init__(cid, conf, train_data, test_data, device, **kwargs)
-        self.env = env
-        self.state, _ = self.env.reset()
-        self.n_actions = self.env.action_space.n
-        self.n_observation = len(self.state)
-
-
-class DQN_Client(RL_Client):
+class DQN_Client(BaseClient):
     def __init__(self, cid, conf, train_data=None, test_data=None, device=None, env=None, **kwargs):
         super().__init__(cid, conf, train_data, test_data, device, env, **kwargs)
 
@@ -34,8 +26,10 @@ class DQN_Client(RL_Client):
         # self.n_actions = self.env.action_space.n
         # self.n_observation = len(self.state)
 
-        # self.policy_net = self.model(self.n_observation, self.n_actions).to(device)
-        # self.target_net = self.model(self.n_observation, self.n_actions).to(device)
+        self.policy_net = None
+        self.target_net = None
+        self.compressed_policy_net = None
+        self.compressed_target_net = None
         # self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.memory = ReplayMemory(10000)
@@ -50,16 +44,59 @@ class DQN_Client(RL_Client):
         self.step_done = 0
         self.batch_size = 128
 
-        
-    def pre_train(self):
-        """Setup loss function and optimizer before training."""
-        self.simulate_straggler()
-        # self.state, _ = self.env.reset()
-        # self.n_actions = self.env.action_space.n
-        # self.n_observation = len(self.state)
+    def run_train(self, model, conf):
+        """Conduct training on clients.
 
-        self.policy_net = self.model
-        self.target_net = self.model
+        Args:
+            model (nn.Module): Model to train, compressed global model on server.
+            conf (omegaconf.dictconfig.DictConfig): Client configurations.
+        Returns:
+            :obj:`UploadRequest`: Training contents. Unify the interface for both local and remote operations.
+        """
+        self.conf = conf
+        # if conf.track:
+        #     self._tracker.set_client_context(conf.task_id, conf.round_id, self.cid)
+
+        self._is_train = True
+
+        self.download(model)
+        # self.track(metric.TRAIN_DOWNLOAD_SIZE, model_size(model))
+
+        self.decompression()
+
+        self.pre_train()
+        self.train(conf, self.device)
+        self.post_train()
+
+        # self.track(metric.TRAIN_ACCURACY, self.train_accuracy)
+        # self.track(metric.TRAIN_LOSS, self.train_loss)
+        # self.track(metric.TRAIN_TIME, self.train_time)
+
+        # if conf.local_test:
+        #     self.test_local()
+
+        self.compression()
+
+        # self.track(metric.TRAIN_UPLOAD_SIZE, model_size(self.compressed_model))
+
+        # self.encryption()
+
+        return self.upload()
+       
+    def download(self, model):
+        if self.compressed_policy_net:
+            self.compressed_policy_net.load_state_dict(model.state_dict())
+            self.compressed_target_net.load_state_dict(model.state_dict())
+            self.compressed_target_net.load_state_dict(self.compressed_policy_net.state_dict())
+        else:
+            self.compressed_policy_net = copy.deepcopy(model)
+            self.compressed_target_net = copy.deepcopy(model)
+            self.compressed_target_net.load_state_dict(self.compressed_policy_net.state_dict())
+
+    def decompression(self):
+        """Decompressed DQN model. It can be further implemented when the model is compressed in the server."""
+        self.policy_net = self.compressed_policy_net
+        self.target_net = self.compressed_target_net
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def train(self, conf, device="cpu"):
@@ -176,36 +213,10 @@ class DQN_Client(RL_Client):
         else:
             return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
 
-    def construct_upload_request(self):
-        """Construct client upload request for training updates and testing results.
+    def compression(self):
+        """Compress the client local model after training and before uploading to the server."""
+        self.compressed_model = self.policy_net
 
-        Returns:
-            :obj:`UploadRequest`: The upload request defined in protobuf to unify local and remote operations.
-        """
-        data = codec.marshal(server_pb.Performance(accuracy=self.test_accuracy, loss=self.test_loss))
-        typ = common_pb.DATA_TYPE_PERFORMANCE
-        try:
-            if self._is_train:
-                data = codec.marshal(copy.deepcopy(self.compressed_model))
-                typ = common_pb.DATA_TYPE_PARAMS
-                # data_size = self.train_data.size(self.cid)
-                data_size = 1
-            else:
-                # data_size = 1 if not self.test_data else self.test_data.size(self.cid)
-                data_size = 1
-        except KeyError:
-            # When the datasize cannot be get from dataset, default to use equal aggregate
-            data_size = 1
-
-        m = self._tracker.get_client_metric().to_proto() if self._tracker else common_pb.ClientMetric()
-        return server_pb.UploadRequest(
-            task_id=self.conf.task_id,
-            round_id=self.conf.round_id,
-            client_id=str(self.cid),
-            content=server_pb.UploadContent(
-                data=data,
-                type=typ,
-                data_size=data_size,
-                metric=m,
-            ),
-        )
+    def upload(self):
+        weight = codec.marshal(copy.deepcopy(self.compressed_model.state_dict()))
+        return weight
