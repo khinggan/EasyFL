@@ -6,7 +6,7 @@ import "easyfl/pb/common.proto";
 message UploadRequest {
     string task_id = 1;
     int32 round_id = 2;
-    string client_id = 3;
+    int32 client_id = 3;
     UploadContent content = 4;
 }
 
@@ -14,11 +14,11 @@ message UploadContent {
     // Data is the marshaled data, value depends on data type.
     bytes data = 1;
     // Type of data.
-    DataType type = 2;
+    // DataType type = 2;
     // optional, number of data point
-    int64 data_size = 3;
-    // optional, client metric
-    ClientMetric metric = 4;
+    // int64 data_size = 3;
+    // // optional, client metric
+    // ClientMetric metric = 4;
     // optional, extra upload content
     bytes extra = 99;
 }
@@ -58,6 +58,7 @@ message Client {
 
 service ServerService {
     rpc Upload (UploadRequest) returns (UploadResponse) {}
+    rpc Upload_DQN (UploadRequest) returns (UploadResponse) {}
     rpc Run (RunRequest) returns (RunResponse) {}
     rpc Stop (StopRequest) returns (StopResponse) {}
 }

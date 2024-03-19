@@ -101,3 +101,16 @@ If you use this platform or related projects in your research, please cite this 
 
 Weiming Zhuang [:octocat:](https://github.com/weimingwill) <br/>
 Xin Gan [:octocat:](https://github.com/codergan)
+
+# Run the code
+
+Compile ProtoBuff command
+```bash
+python3 -m grpc_tools.protoc -Iprotos/ --python_out=. --pyi_out=. --grpc_python_out=. protos/easyfl/pb/server_service.proto
+```
+
+Run
+```bash
+./examples/remote_dqn_start.sh
+python3 examples/remote_dqn_run.py
+```

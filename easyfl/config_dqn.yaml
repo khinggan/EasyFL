@@ -45,10 +45,8 @@ env:
   env_dist: "same"      # same or different (e.g. different map, but observation space and action space is same)
   # if env_dist is different
   envs: 
-   - "Env1"
-   - "Env2"
-   - "Env3"
-   - "Env4"
+   - "CartPole-v1"
+   - "CartPole-v1"
   # if env_dist is same
   env_name: "CartPole-v1"
   env_type: "gym"        # gym or customized environment

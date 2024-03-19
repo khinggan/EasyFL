@@ -167,6 +167,8 @@ class Coordinator_RL(Coordinator):
             user = self.conf.index
         else:
             print("Please initialize the client index in conf.index")
+        
+        env = gym.make(self.conf.env.envs[0])
 
         self._client_class = DQN_Client(
             user,
@@ -178,7 +180,7 @@ class Coordinator_RL(Coordinator):
             local_port=self.conf.local_port,
             server_addr=self.conf.server_addr,
             tracker_addr=self.conf.tracker_addr, 
-            env=self.envs[user] if self.envs else None
+            env=env
         )
         return self._client_class
 
@@ -304,7 +306,7 @@ def init_conf(conf=None):
         omegaconf.dictconfig.DictConfig: Internal configurations managed by OmegaConf.
     """
     here = path.abspath(path.dirname(__file__))
-    config_file = path.join(here, 'config.yaml')
+    config_file = path.join(here, 'config_dqn.yaml')
     return load_config(config_file, conf)
 
 

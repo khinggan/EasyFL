@@ -6,6 +6,9 @@ import torch.nn as nn
 import torch.optim as optim
 import logging
 from itertools import count
+from easyfl.client.service import ClientService
+
+from easyfl.communication import grpc_wrapper
 logger = logging.getLogger(__name__)
 logger.setLevel(10)
 from easyfl.client import BaseClient
@@ -21,6 +24,8 @@ class DQN_Client(BaseClient):
         super().__init__(cid, conf, train_data, test_data, device, env, **kwargs)
 
         self.env = env
+
+        self.dqn_server_stub = None
 
         # self.state, _ = self.env.reset()
         # self.n_actions = self.env.action_space.n
@@ -218,5 +223,85 @@ class DQN_Client(BaseClient):
         self.compressed_model = self.policy_net
 
     def upload(self):
-        weight = codec.marshal(copy.deepcopy(self.compressed_model.state_dict()))
-        return weight
+        if not self.is_remote:
+            weight = codec.marshal(copy.deepcopy(self.compressed_model.state_dict()))
+            return weight
+        
+        request = self.construct_upload_request()
+        
+        self.upload_remotely(request=request)
+    
+    def construct_upload_request(self):
+        """Construct client upload request for training updates and testing results.
+
+        Returns:
+            :obj:`UploadRequest`: The upload request defined in protobuf to unify local and remote operations.
+        """
+        weights = codec.marshal(copy.deepcopy(self.compressed_model.state_dict()))
+        # typ = common_pb.DATA_TYPE_PARAMS
+        # data_size = codec.marshal(copy.deepcopy(self.compressed_model.state_dict()))
+
+        return server_pb.UploadRequest(
+            task_id=self.conf.task_id,
+            round_id=self.conf.round_id,
+            client_id=self.cid,
+            content=server_pb.UploadContent(
+                data=weights,
+                # type=typ,
+                # data_size=data_size,
+                # metric=m,
+            ),
+        )
+
+    def upload_remotely(self, request):
+        """Send upload request to remote server via gRPC.
+
+        Args:
+            request (:obj:`UploadRequest`): Upload request.
+        """
+        start_time = time.time()
+
+        self.connect_to_server()
+        resp = self.dqn_server_stub.Upload_DQN(request)
+
+        upload_time = time.time() - start_time
+        # m = metric.TRAIN_UPLOAD_TIME if self._is_train else metric.TEST_UPLOAD_TIME
+        # self.track(m, upload_time)
+
+        logger.info("client upload time: {}s".format(upload_time))
+        if resp.status.code == common_pb.SC_OK:
+            logger.info("Uploaded remotely to the server successfully\n")
+        else:
+            logger.error("Failed to upload, code: {}, message: {}\n".format(resp.status.code, resp.status.message))
+    
+    def connect_to_server(self):
+        """Establish connection between the client and the server."""
+        if self.is_remote and self.dqn_server_stub is None:
+            self.dqn_server_stub = grpc_wrapper.init_stub(grpc_wrapper.TYPE_SERVER, self._server_addr)
+            logger.info("Successfully connected to gRPC server {}".format(self._server_addr))
+
+
+    def start_service(self):
+        """Start client service."""
+        if self.is_remote:
+            grpc_wrapper.start_service(grpc_wrapper.TYPE_CLIENT, ClientService(self), self.local_port)
+    
+    def operate(self, model, conf, index, is_train=True):
+        """A wrapper over operations (training/testing) on clients.
+
+        Args:
+            model (nn.Module): Model for operations.
+            conf (omegaconf.dictconfig.DictConfig): Client configurations.
+            index (int): Client index in the client list, for retrieving data. TODO: improvement.
+            is_train (bool): The flag to indicate whether the operation is training, otherwise testing.
+        """
+        try:
+            # Load the data index depending on server request
+            self.cid = index
+        except IndexError:
+            logger.error("Data index exceed the available data, abort training")
+            return
+
+        if is_train:
+            logger.info("Train on client: {}".format(self.cid))
+            self.run_train(model, conf)

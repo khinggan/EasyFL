@@ -19,6 +19,11 @@ class ServerServiceStub(object):
                 request_serializer=easyfl_dot_pb_dot_server__service__pb2.UploadRequest.SerializeToString,
                 response_deserializer=easyfl_dot_pb_dot_server__service__pb2.UploadResponse.FromString,
                 )
+        self.Upload_DQN = channel.unary_unary(
+                '/easyfl.pb.ServerService/Upload_DQN',
+                request_serializer=easyfl_dot_pb_dot_server__service__pb2.UploadRequest.SerializeToString,
+                response_deserializer=easyfl_dot_pb_dot_server__service__pb2.UploadResponse.FromString,
+                )
         self.Run = channel.unary_unary(
                 '/easyfl.pb.ServerService/Run',
                 request_serializer=easyfl_dot_pb_dot_server__service__pb2.RunRequest.SerializeToString,
@@ -35,6 +40,12 @@ class ServerServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def Upload(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Upload_DQN(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -57,6 +68,11 @@ def add_ServerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'Upload': grpc.unary_unary_rpc_method_handler(
                     servicer.Upload,
+                    request_deserializer=easyfl_dot_pb_dot_server__service__pb2.UploadRequest.FromString,
+                    response_serializer=easyfl_dot_pb_dot_server__service__pb2.UploadResponse.SerializeToString,
+            ),
+            'Upload_DQN': grpc.unary_unary_rpc_method_handler(
+                    servicer.Upload_DQN,
                     request_deserializer=easyfl_dot_pb_dot_server__service__pb2.UploadRequest.FromString,
                     response_serializer=easyfl_dot_pb_dot_server__service__pb2.UploadResponse.SerializeToString,
             ),
@@ -92,6 +108,23 @@ class ServerService(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/easyfl.pb.ServerService/Upload',
+            easyfl_dot_pb_dot_server__service__pb2.UploadRequest.SerializeToString,
+            easyfl_dot_pb_dot_server__service__pb2.UploadResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def Upload_DQN(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/easyfl.pb.ServerService/Upload_DQN',
             easyfl_dot_pb_dot_server__service__pb2.UploadRequest.SerializeToString,
             easyfl_dot_pb_dot_server__service__pb2.UploadResponse.FromString,
             options, channel_credentials,

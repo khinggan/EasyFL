@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 from easyfl.pb import common_pb2 as common_pb
 from easyfl.pb import client_service_pb2 as client_pb
 
+MODEL = "model"
+DATA_SIZE = "data_size"
+
 
 class DQNServer(BaseServer):
     def __init__(self, conf, test_data=None, val_data=None, is_remote=False, local_port=22999):
@@ -24,6 +27,9 @@ class DQNServer(BaseServer):
         self.compress_target_net = None
 
         self.dqn_client_stubs = {}
+        self.dqn_server_stub = {}
+
+        self.dqn_client_uploads = {}
         
     def distribution_to_train_locally(self):
         """Conduct training sequentially for selected clients in the group."""
@@ -43,15 +49,16 @@ class DQNServer(BaseServer):
         self.set_client_uploads_train(uploaded_weights)
     
     def set_client_uploads_train(self, uploaded_weights):
-        self._client_uploads['weights'] = uploaded_weights
+        self.dqn_client_uploads['weights'] = uploaded_weights
     
     def aggregation(self):
         """Aggregate training updates from clients.
         Server aggregates trained models from clients via federated averaging.
         """
-        uploaded_weights = self._client_uploads["weights"]
 
-        agg_policy_net_weight = self.average_weights(uploaded_weights)
+        weights = self.dqn_client_uploads["weights"]
+
+        agg_policy_net_weight = self.average_weights(weights)
         
         # set model
         self.policy_net.load_state_dict(agg_policy_net_weight)
@@ -163,7 +170,7 @@ class DQNServer(BaseServer):
             cid (str): Client id.
             request (:obj:`OperateRequest`): gRPC request of specific operations.
         """
-        resp = self.client_stubs[cid].Operate(request)
+        resp = self.dqn_client_stubs[cid].Operate(request)
         if resp.status.code != common_pb.SC_OK:
             logger.error("Failed to train/test in client {}, error: {}".format(cid, resp.status.message))
         else:
@@ -181,8 +188,11 @@ class DQNServer(BaseServer):
         # Setup
         self._start_time = time.time()
         self._reset()
-        self.set_model(model)
-        self.set_clients(clients)
+        # self.set_model(model)
+        # self.set_clients(clients)
+        self.policy_net = model
+        self.target_net = model
+        self._clients = clients
 
         if self._should_track():
             self._tracker.create_task(self.conf.task_id, OmegaConf.to_container(self.conf))
@@ -207,3 +217,13 @@ class DQNServer(BaseServer):
             # # Save Model
             # self.save_model()
 
+    # def set_client_uploads_train(self, models, weights):
+    #     """Set training updates uploaded from clients.
+
+    #     Args:
+    #         models (dict): A collection of models.
+    #         weights (dict): A collection of weights.
+    #         metrics (dict): Client training metrics.
+    #     """
+    #     self.set_client_uploads("MODEL", models)
+    #     self.set_client_uploads("DATA_SIZE", weights)

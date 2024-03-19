@@ -74,6 +74,58 @@ class ServerService(server_grpc.ServerServiceServicer):
             status=common_pb.Status(code=common_pb.SC_OK),
         )
         return response
+    
+    def Upload_DQN(self, request, context):
+        """Handle upload from clients."""
+        # TODO: put train and test logic in a separate thread and add thread lock to ensure atomicity.
+        t = threading.Thread(target=self._handle_upload_dqn, args=[request, context])
+        t.start()
+        response = server_pb.UploadResponse(
+            status=common_pb.Status(code=common_pb.SC_OK),
+        )
+        return response
+    
+    def _handle_upload_dqn(self, request, context):
+        # if not self._base.upload_event.is_set():
+        weights = codec.unmarshal(request.content.data)
+
+        # weights = request.content.data_size
+
+        clients_per_round = self._base.conf.server.clients_per_round
+        num_of_clients = self._base.num_of_clients()
+        if num_of_clients < clients_per_round:
+            # TODO: use a more appropriate way to handle this situation
+            logger.warning(
+                "Available number of clients {} is smaller than clients per round {}".format(num_of_clients,
+                                                                                             clients_per_round))
+            self._clients_per_round = num_of_clients
+        else:
+            self._clients_per_round = clients_per_round
+
+        # if request.content.type == common_pb.DATA_TYPE_PARAMS:
+        self._handle_upload_train_dqn(request.client_id, weights)
+    
+    def _handle_upload_train_dqn(self, client_id, data):
+        weights = self._base.decompression(data)
+
+        self._uploaded_weights[client_id] = weights
+        # self._uploaded_weights[client_id] = data_size
+        self._train_client_count += 1
+        self._trigger_aggregate_train_dqn()
+    
+    def _trigger_aggregate_train_dqn(self):
+        logger.info("train_client_count: {}/{}".format(self._train_client_count, self._clients_per_round))
+        if self._train_client_count == self._clients_per_round:
+            self._base.set_client_uploads_train(self._uploaded_weights)
+            self._train_client_count = 0
+            self._reset_train_cache()
+            with self._base.condition():
+                self._base.notify_all()
+
+    def _reset_train_cache(self):
+        self._uploaded_models = {}
+        self._uploaded_weights = {}
+        self._uploaded_metrics = []
 
     def _handle_upload(self, request, context):
         # if not self._base.upload_event.is_set():
