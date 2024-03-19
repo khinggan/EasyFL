@@ -54,8 +54,8 @@ env:
   env_type: "gym"        # gym or customized environment
 
 
-# The name of the model for training, support: lenet, rnn, resnet, resnet18, resnet50, vgg9.
-model: lenet
+# The name of the model for training, support: lenet, rnn, resnet, resnet18, resnet50, vgg9, dqn.
+model: dqn
 # How to conduct testing, options: test_in_client or test_in_server.
   # `test_in_client` means that each client has a test set to run testing.
   # `test_in_server` means that server has a test set to run testing for the global model. Use this mode for cifar datasets.

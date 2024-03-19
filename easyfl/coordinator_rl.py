@@ -28,23 +28,9 @@ class Coordinator_RL(Coordinator):
     """
 
     def __init__(self):
-        self.registered_model = False
-        # self.registered_dataset = False
-        self.registerd_env = False
-        self.registered_server = False
-        self.registered_client = False
-        self.train_data = None
-        self.test_data = None
-        self.val_data = None
         self.envs = None
-        self.conf = None
-        self.model = None
-        self._model_class = None
-        self.server = None
-        self._server_class = None
-        self.clients = None
-        self._client_class = None
-        self.tracker = None
+        self.policy_net = None
+        self.target_net = None
 
     def init(self, conf, init_all=True):
         """Initialize coordinator
@@ -116,21 +102,23 @@ class Coordinator_RL(Coordinator):
 
     def init_model(self):
         """Initialize model instance."""
-        if not self.registered_model:
-            self._model_class = load_model(self.conf.model)
+        if self.envs:
+            state, _ = self.envs[0].reset()
+            n_actions = self.envs[0].action_space.n
+            n_observation = len(state)
+        else: 
+            # default env's size
+            n_actions = 2
+            n_observation = 4
+            
+        model = load_model(self.conf.model)
+        self.policy_net = model(n_observation, n_actions).to(self.conf.device)
+        self.target_net = model(n_observation, n_actions).to(self.conf.device)
 
-        # model_class is None means model is registered as instance, no need initialization
-        if self._model_class:
-            if self.conf.model == 'dqn' and len(self.envs) > 0:
-                state, _ = self.envs[0].reset()
-                n_actions = self.envs[0].action_space.n
-                n_observation = len(state)
-                self.model = self._model_class(n_observation, n_actions).to(self.conf.device)
 
     def init_server(self):
         """Initialize a server instance."""
-        if not self.registered_server:
-            self._server_class = DQNServer
+        self._server_class = DQNServer
 
         kwargs = {
             "is_remote": self.conf.is_remote,
@@ -138,9 +126,8 @@ class Coordinator_RL(Coordinator):
         }
 
         self.server = self._server_class(self.conf, **kwargs)
-        if self.conf.model == "dqn":
-            self.server.policy_net = self.model
-            self.server.target_net = self.model
+        self._server_class.policy_net = self.policy_net
+        self._server_class.target_net = self.target_net
 
     def init_clients(self):
         """Initialize client instances, each represent a federated reinforcement learning clients."""
@@ -175,24 +162,25 @@ class Coordinator_RL(Coordinator):
         Returns:
             :obj:`BaseClient`: The initialized client instance.
         """
-        if not self.registered_client:
-            self._client_class = None
-
         # Get a random client if not specified
-        if self.conf.index:
-            user = self.train_data.users[self.conf.index]
+        if self.conf.index is not None:
+            user = self.conf.index
         else:
-            user = random.choice(self.train_data.users)
+            print("Please initialize the client index in conf.index")
 
-        return self._client_class(user,
-                                  self.conf.client,
-                                  self.train_data,
-                                  self.test_data,
-                                  self.conf.device,
-                                  is_remote=self.conf.is_remote,
-                                  local_port=self.conf.local_port,
-                                  server_addr=self.conf.server_addr,
-                                  tracker_addr=self.conf.tracker_addr)
+        self._client_class = DQN_Client(
+            user,
+            self.conf.client,
+            None,
+            None,
+            self.conf.device,
+            is_remote=self.conf.is_remote,
+            local_port=self.conf.local_port,
+            server_addr=self.conf.server_addr,
+            tracker_addr=self.conf.tracker_addr, 
+            env=self.envs[user] if self.envs else None
+        )
+        return self._client_class
 
     def start_server(self, args):
         """Start a server service for remote training.
@@ -204,9 +192,6 @@ class Coordinator_RL(Coordinator):
         """
         if args:
             self.conf = OmegaConf.merge(self.conf, args.__dict__)
-
-        if self.conf.test_mode == TEST_IN_SERVER:
-            self.init_dataset()
 
         self.init_model()
 
@@ -226,7 +211,8 @@ class Coordinator_RL(Coordinator):
         if args:
             self.conf = OmegaConf.merge(self.conf, args.__dict__)
 
-        self.init_dataset()
+        # self.init_dataset()
+        # init environment
 
         client = self.init_client()
 
@@ -399,10 +385,10 @@ def init_model():
     Returns:
         nn.Module: Model used in federated learning.
     """
-    global _global_coord
-    _global_coord.init_model()
+    global _global_coord_rl
+    _global_coord_rl.init_model()
 
-    return _global_coord.model
+    return _global_coord_rl.policy_net
 
 
 def start_server(args=None):
@@ -411,9 +397,9 @@ def start_server(args=None):
     Args:
         args (argparse.Namespace): Configurations passed in as arguments.
     """
-    global _global_coord
+    global _global_coord_rl
 
-    _global_coord.start_server(args)
+    _global_coord_rl.start_server(args)
 
 
 def start_client(args=None):
@@ -422,9 +408,9 @@ def start_client(args=None):
     Args:
         args (argparse.Namespace): Configurations passed in as arguments.
     """
-    global _global_coord
+    global _global_coord_rl
 
-    _global_coord.start_client(args)
+    _global_coord_rl.start_client(args)
 
 
 def get_coordinator():

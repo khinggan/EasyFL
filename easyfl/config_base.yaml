@@ -40,20 +40,6 @@ data:
     # None means clients are simulated with the same data quantity.
   weights: NULL
 
-env:
-  num_of_clients: 2    # client number
-  env_dist: "same"      # same or different (e.g. different map, but observation space and action space is same)
-  # if env_dist is different
-  envs: 
-   - "Env1"
-   - "Env2"
-   - "Env3"
-   - "Env4"
-  # if env_dist is same
-  env_name: "CartPole-v1"
-  env_type: "gym"        # gym or customized environment
-
-
 # The name of the model for training, support: lenet, rnn, resnet, resnet18, resnet50, vgg9.
 model: lenet
 # How to conduct testing, options: test_in_client or test_in_server.

@@ -321,7 +321,7 @@ def init_conf(conf=None):
         omegaconf.dictconfig.DictConfig: Internal configurations managed by OmegaConf.
     """
     here = path.abspath(path.dirname(__file__))
-    config_file = path.join(here, 'config.yaml')
+    config_file = path.join(here, 'config_base.yaml')
     return load_config(config_file, conf)
 
 
